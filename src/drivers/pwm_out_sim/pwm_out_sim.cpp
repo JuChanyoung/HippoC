@@ -384,13 +384,13 @@ PWMSim::task_main()
 	/* advertise the mixed control outputs */
 	actuator_outputs_s outputs = {};
 
-	/* advertise the mixed control outputs, insist on the first group output */
-	_outputs_pub = orb_advertise(ORB_ID(actuator_outputs), &outputs);
+	/* don't advertise control outputs until a mixer is available */
+    _outputs_pub = nullptr;
 
 
 	/* loop until killed */
 	while (!_task_should_exit) {
-
+        //PX4_INFO("LOOP");
 		if (_groups_subscribed != _groups_required) {
 			subscribe();
 			_groups_subscribed = _groups_required;
@@ -398,6 +398,7 @@ PWMSim::task_main()
 
 		/* handle update rate changes */
 		if (_current_update_rate != _update_rate) {
+		    //PX4_INFO("Changing PWM rate");
 			int update_rate_in_ms = int(1000 / _update_rate);
 
 			if (update_rate_in_ms < 2) {
@@ -477,6 +478,7 @@ PWMSim::task_main()
 			}
 
 			/* do mixing */
+			//PX4_INFO("MIXING");
 			num_outputs = _mixers->mix(&outputs.output[0], num_outputs, NULL);
 			outputs.noutputs = num_outputs;
 			outputs.timestamp = hrt_absolute_time();
@@ -509,8 +511,20 @@ PWMSim::task_main()
 			}
 
 
-			/* and publish for anyone that cares to see */
-			orb_publish(ORB_ID(actuator_outputs), _outputs_pub, &outputs);
+	    if (_outputs_pub == nullptr) {
+ 	     /* if this is the first message, advertise the mixed control outputs,
+         insist on the first group output */
+         _outputs_pub = orb_advertise(ORB_ID(actuator_outputs), &outputs);
+        } else {
+ 			/* and publish for anyone that cares to see */
+   			orb_publish(ORB_ID(actuator_outputs), _outputs_pub, &outputs);
+            /*PX4_INFO("Publish actuator out %f, %f, %f, %f",
+            (double)outputs.output[0],
+            (double)outputs.output[1],
+            (double)outputs.output[2],
+            (double)outputs.output[3]
+            );*/
+        }
 		}
 
 		/* how about an arming update? */
@@ -918,6 +932,22 @@ test(void)
 }
 
 int
+arm(void)
+ {
+    actuator_armed_s aa;
+    aa.armed = 1;
+
+    orb_advert_t handle = orb_advertise(ORB_ID(actuator_armed), &aa);
+
+    if (handle == nullptr) {
+        puts("advertise actuator_armed failed");
+        return 1;
+    }
+
+    return 0;
+}
+
+int
 fake(int argc, char *argv[])
 {
 	if (argc < 5) {
@@ -1016,6 +1046,10 @@ pwm_out_sim_main(int argc, char *argv[])
 	} else if (!strcmp(verb, "test")) {
 		ret = test();
 	}
+
+	else if (!strcmp(verb, "arm")) {
+ 		ret = arm();
+ 	}
 
 	else if (!strcmp(verb, "fake")) {
 		ret = fake(argc - 1, argv + 1);
