@@ -1,6 +1,6 @@
 uorb start
 param load
-param set MAV_TYPE 2			// to tell them we have a quadrocopter
+param set MAV_TYPE 2
 param set SYS_AUTOSTART 4010
 param set SYS_RESTART_TYPE 2
 param set COM_DISARM_LAND 0
@@ -20,8 +20,6 @@ sleep 1
 
 sensors start
 commander start
-
-// -r Übertragungsrate B/s, -s Stream, -u
 
 mavlink start -u 14556 -r 4000000
 mavlink start -u 14557 -r 4000000 -m onboard -o 14540
