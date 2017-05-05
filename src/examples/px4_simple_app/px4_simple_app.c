@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2012-2015 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2012-2016 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -46,80 +46,102 @@
 #include <poll.h>
 #include <string.h>
 
+// Include uORB and the required topics for this app
 #include <uORB/uORB.h>
 #include <uORB/topics/sensor_combined.h>
-#include <uORB/topics/vehicle_attitude.h>
+#include <uORB/topics/actuator_controls.h>
+#include <uORB/topics/att_pos_mocap.h>
 
 __EXPORT int px4_simple_app_main(int argc, char *argv[]);
 
 int px4_simple_app_main(int argc, char *argv[])
 {
-	PX4_INFO("Hello Sky!");
+    PX4_INFO("Hello HippoCampus!");
 
-	/* subscribe to sensor_combined topic */
-	int sensor_sub_fd = orb_subscribe(ORB_ID(sensor_combined));
-	orb_set_interval(sensor_sub_fd, 1000);
+    /* subscribe to sensor_combined topic */
+    int sensor_sub_fd = orb_subscribe(ORB_ID(sensor_combined));
+    /* limit the update rate to 5 Hz */
+    orb_set_interval(sensor_sub_fd, 200);
 
-	/* advertise attitude topic */
-	struct vehicle_attitude_s att;
-	memset(&att, 0, sizeof(att));
-	orb_advert_t att_pub = orb_advertise(ORB_ID(vehicle_attitude), &att);
+    /* subscribe to vehicle_local_position topic */
+    int position_sub_fd = orb_subscribe(ORB_ID(att_pos_mocap));
+    /* limit the update rate to 5 Hz */
+    orb_set_interval(position_sub_fd, 200);
 
-	/* one could wait for multiple topics with this technique, just using one here */
-	px4_pollfd_struct_t fds[] = {
-		{ .fd = sensor_sub_fd,   .events = POLLIN },
-		/* there could be more file descriptors here, in the form like:
-		 * { .fd = other_sub_fd,   .events = POLLIN },
-		 */
-	};
+    /* advertise actuator_control topic */
+    struct actuator_controls_s act;
+    memset(&act, 0, sizeof(act));
+    orb_advert_t act_pub = orb_advertise(ORB_ID(actuator_controls_0), &act);
 
-	int error_counter = 0;
+    /* one could wait for multiple topics with this technique, just using one here */
+    px4_pollfd_struct_t fds[] = {
+        { .fd = sensor_sub_fd,   .events = POLLIN },
+        { .fd = position_sub_fd,   .events = POLLIN },
+        /* there could be more file descriptors here, in the form like:
+         * { .fd = other_sub_fd,   .events = POLLIN },
+         */
+    };
 
-	for (int i = 0; i < 5; i++) {
-		/* wait for sensor update of 1 file descriptor for 1000 ms (1 second) */
-		int poll_ret = px4_poll(fds, 1, 1000);
+    int error_counter = 0;
 
-		/* handle the poll result */
-		if (poll_ret == 0) {
-			/* this means none of our providers is giving us data */
-			PX4_ERR("[px4_simple_app] Got no data within a second");
+    for (int i = 0; i < 100; i++) {
+        /* wait for sensor update of 1 file descriptor for 1000 ms (1 second) */
+        int poll_ret = px4_poll(fds, 1, 1000);
 
-		} else if (poll_ret < 0) {
-			/* this is seriously bad - should be an emergency */
-			if (error_counter < 10 || error_counter % 50 == 0) {
-				/* use a counter to prevent flooding (and slowing us down) */
-				PX4_ERR("[px4_simple_app] ERROR return value from poll(): %d"
-					, poll_ret);
-			}
+        /* handle the poll result */
+        if (poll_ret == 0) {
+            /* this means none of our providers is giving us data */
+            PX4_ERR("Got no data within a second");
 
-			error_counter++;
+        } else if (poll_ret < 0) {
+            /* this is seriously bad - should be an emergency */
+            if (error_counter < 10 || error_counter % 50 == 0) {
+                /* use a counter to prevent flooding (and slowing us down) */
+                PX4_ERR("ERROR return value from poll(): %d", poll_ret);
+            }
 
-		} else {
+            error_counter++;
 
-			if (fds[0].revents & POLLIN) {
-				/* obtained data for the first file descriptor */
-				struct sensor_combined_s raw;
-				/* copy sensors raw data into local buffer */
-				orb_copy(ORB_ID(sensor_combined), sensor_sub_fd, &raw);
-				PX4_WARN("[px4_simple_app] Accelerometer:\t%8.4f\t%8.4f\t%8.4f",
-					 (double)raw.accelerometer_m_s2[0],
-					 (double)raw.accelerometer_m_s2[1],
-					 (double)raw.accelerometer_m_s2[2]);
+        } else {
 
-				/* set att and publish this information for other apps */
-				att.roll = raw.accelerometer_m_s2[0];
-				att.pitch = raw.accelerometer_m_s2[1];
-				att.yaw = raw.accelerometer_m_s2[2];
-				orb_publish(ORB_ID(vehicle_attitude), att_pub, &att);
-			}
+            if (fds[0].revents & POLLIN) {
+                /* obtained data for the first file descriptor */
+                struct sensor_combined_s raw_sensor;
+                /* copy sensors raw data into local buffer */
+                orb_copy(ORB_ID(sensor_combined), sensor_sub_fd, &raw_sensor);
+                PX4_INFO("Accelerometer:\t%8.4f\t%8.4f\t%8.4f",
+                     (double)raw_sensor.accelerometer_m_s2[0],
+                     (double)raw_sensor.accelerometer_m_s2[1],
+                     (double)raw_sensor.accelerometer_m_s2[2]);
 
-			/* there could be more file descriptors here, in the form like:
-			 * if (fds[1..n].revents & POLLIN) {}
-			 */
-		}
-	}
+                /* obtained data for the second file descriptor */
+                struct att_pos_mocap_s raw_position;
+                /* copy sensors raw data into local buffer */
+                orb_copy(ORB_ID(att_pos_mocap), position_sub_fd, &raw_position);
+                PX4_INFO("Local Position:\t%8.4f\t%8.4f\t%8.4f",
+                     (double)raw_position.x,
+                     (double)raw_position.y,
+                     (double)raw_position.z);
 
-	PX4_INFO("exiting");
+		        // Give actuator input to the HippoC, this will result in a circle
+		        act.control[2] = 1.0f;		// yaw
+                act.control[3] = 1.0f;		// thrust
+                orb_publish(ORB_ID(actuator_controls_0), act_pub, &act);
 
-	return 0;
+
+            }
+
+
+            /* there could be more file descriptors here, in the form like:
+             * if (fds[1..n].revents & POLLIN) {}
+             */
+        }
+    }
+
+
+    PX4_INFO("exiting");
+
+    return 0;
 }
+
+
