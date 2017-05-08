@@ -33,9 +33,10 @@
 
 /**
  * @file px4_simple_app.c
- * Minimal application example for PX4 autopilot
+ * Minimal application example for PX4 autopilot which drives circles and gives out the position of the simulated object
+ * as well as the acceleration data.
  *
- * @author Example User <mail@example.com>
+ * @author Nils Rottann <Nils.Rottmann@tuhh.de>
  */
 
 #include <px4_config.h>
@@ -48,27 +49,27 @@
 
 // Include uORB and the required topics for this app
 #include <uORB/uORB.h>
-#include <uORB/topics/sensor_combined.h>
-#include <uORB/topics/actuator_controls.h>
-#include <uORB/topics/att_pos_mocap.h>
+#include <uORB/topics/sensor_combined.h>                // this topics hold the acceleration data
+#include <uORB/topics/actuator_controls.h>              // this topic gives the actuators control input
+#include <uORB/topics/att_pos_mocap.h>                  // this topic holds the position from gazebo
 
 __EXPORT int px4_simple_app_main(int argc, char *argv[]);
 
 int px4_simple_app_main(int argc, char *argv[])
 {
-    PX4_INFO("Hello HippoCampus!");
+    PX4_INFO("px4_simple_app has been started!");
 
     /* subscribe to sensor_combined topic */
     int sensor_sub_fd = orb_subscribe(ORB_ID(sensor_combined));
     /* limit the update rate to 5 Hz */
     orb_set_interval(sensor_sub_fd, 200);
 
-    /* subscribe to vehicle_local_position topic */
+    /* subscribe to att_pos_mocap topic */
     int position_sub_fd = orb_subscribe(ORB_ID(att_pos_mocap));
     /* limit the update rate to 5 Hz */
     orb_set_interval(position_sub_fd, 200);
 
-    /* advertise actuator_control topic */
+    /* advertise to actuator_control topic */
     struct actuator_controls_s act;
     memset(&act, 0, sizeof(act));
     orb_advert_t act_pub = orb_advertise(ORB_ID(actuator_controls_0), &act);
@@ -109,6 +110,7 @@ int px4_simple_app_main(int argc, char *argv[])
                 struct sensor_combined_s raw_sensor;
                 /* copy sensors raw data into local buffer */
                 orb_copy(ORB_ID(sensor_combined), sensor_sub_fd, &raw_sensor);
+                // printing the sensor data into the terminal
                 PX4_INFO("Accelerometer:\t%8.4f\t%8.4f\t%8.4f",
                      (double)raw_sensor.accelerometer_m_s2[0],
                      (double)raw_sensor.accelerometer_m_s2[1],
@@ -118,28 +120,23 @@ int px4_simple_app_main(int argc, char *argv[])
                 struct att_pos_mocap_s raw_position;
                 /* copy sensors raw data into local buffer */
                 orb_copy(ORB_ID(att_pos_mocap), position_sub_fd, &raw_position);
+                // printing the position data into the terminal
                 PX4_INFO("Local Position:\t%8.4f\t%8.4f\t%8.4f",
                      (double)raw_position.x,
                      (double)raw_position.y,
                      (double)raw_position.z);
-
-		        // Give actuator input to the HippoC, this will result in a circle
-		        act.control[2] = 1.0f;		// yaw
-                act.control[3] = 1.0f;		// thrust
-                orb_publish(ORB_ID(actuator_controls_0), act_pub, &act);
-
-
             }
-
-
-            /* there could be more file descriptors here, in the form like:
-             * if (fds[1..n].revents & POLLIN) {}
-             */
         }
+
+    // Give actuator input to the HippoC, this will result in a circle
+	act.control[2] = 1.0f;		// yaw
+    act.control[3] = 1.0f;		// thrust
+    orb_publish(ORB_ID(actuator_controls_0), act_pub, &act);
+
     }
 
 
-    PX4_INFO("exiting");
+    PX4_INFO("exiting px4_simple_app!");
 
     return 0;
 }
