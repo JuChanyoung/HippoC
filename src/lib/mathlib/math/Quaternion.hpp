@@ -267,7 +267,7 @@ public:
 	}
 
 	/**
-	 * create rotation matrix for the quaternion
+	 * create rotation matrix for the quaternion when post multiplying with a column vector
 	 */
 	Matrix<3, 3> to_dcm(void) const {
 		Matrix<3, 3> R;
