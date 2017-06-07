@@ -57,6 +57,7 @@ set(config_module_list
 	modules/vtol_att_control
 	modules/uw_att_control
 	modules/path_controller
+	modules/trajectory_planner
 
 	lib/controllib
 	lib/conversion

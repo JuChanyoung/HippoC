@@ -31,12 +31,12 @@
 #
 ############################################################################
 px4_add_module(
-	MODULE modules__path_controller
-	MAIN path_controller
+	MODULE modules__trajectory_planner
+	MAIN trajectory_planner
 	STACK_MAIN 2000
 	SRCS
-		path_controller_main.cpp
-		path_controller_params.c
+		trajectory_planner_main.cpp
+		trajectory_planner_params.c
 	DEPENDS
 		platforms__common
 	)
